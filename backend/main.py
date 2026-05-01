@@ -118,7 +118,8 @@ async def analyze_page(request: AnalyzeRequest):
 @app.post("/modify", response_model=ModifyResponse)
 async def modify_html(request: ModifyRequest):
     """
-    Use the LLM to modify an HTML element based on a natural language instruction.
+    Use the LLM to generate a style/text patch for an HTML element.
+    Returns a JSON patch instead of full modified HTML.
     """
     if not request.element_html.strip():
         raise HTTPException(status_code=400, detail="Element HTML is required")
@@ -128,19 +129,22 @@ async def modify_html(request: ModifyRequest):
     logger.info(f"Modifying element with instruction: {request.instruction}")
 
     try:
-        modified_html = await modify_element(
+        patch = await modify_element(
             element_html=request.element_html,
             styles=request.styles,
             instruction=request.instruction,
+            context=request.context,
+            accessibility=request.accessibility,
+            box_model=request.box_model,
         )
 
-        if not modified_html:
+        if not patch:
             raise HTTPException(
                 status_code=500,
                 detail="LLM returned empty response",
             )
 
-        return ModifyResponse(modified_html=modified_html)
+        return ModifyResponse(patch=patch)
 
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
