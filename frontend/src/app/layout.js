@@ -1,7 +1,7 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "Annotator — Visual UI Editor",
+  title: "WebMorph AI — Visual Web Editor",
   description:
     "Load any website, select elements visually, and modify them with natural language instructions powered by AI.",
 };

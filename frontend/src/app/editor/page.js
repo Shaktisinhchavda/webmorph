@@ -69,7 +69,7 @@ function EditorContent() {
               source: "annotator-parent",
               type: "patch",
               id: entry.elementId,
-              newHtml: entry.previousHtml,
+              newHtml: entry.previousHtml, // Undo always restores previous HTML
             },
             "*"
           );
@@ -82,15 +82,18 @@ function EditorContent() {
         e.preventDefault();
         const entry = useEditorStore.getState().redo();
         if (entry && iframeRef.current?.contentWindow) {
-          iframeRef.current.contentWindow.postMessage(
-            {
-              source: "annotator-parent",
-              type: "patch",
-              id: entry.elementId,
-              newHtml: entry.newHtml,
-            },
-            "*"
-          );
+          const payload = {
+            source: "annotator-parent",
+            type: "patch",
+            id: entry.elementId,
+          };
+          // Redo uses patch if available, otherwise legacy HTML
+          if (entry.patch) {
+            payload.patch = entry.patch;
+          } else if (entry.newHtml) {
+            payload.newHtml = entry.newHtml;
+          }
+          iframeRef.current.contentWindow.postMessage(payload, "*");
         }
       }
     };
@@ -107,13 +110,13 @@ function EditorContent() {
   // Loading state
   if (isLoading) {
     return (
-      <div className="flex-1 flex flex-col h-screen">
+      <div className="flex-1 flex flex-col h-screen bg-background">
         <Toolbar url={url} onBack={handleBack} />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="w-8 h-8 border-2 border-border border-t-accent rounded-full animate-spin mx-auto mb-3" />
             <p className="text-sm text-muted">Loading website…</p>
-            <p className="text-xs text-muted/60 mt-1">{url}</p>
+            <p className="text-xs text-muted/40 mt-1 font-mono">{url}</p>
           </div>
         </div>
       </div>
@@ -123,11 +126,11 @@ function EditorContent() {
   // Error state
   if (error) {
     return (
-      <div className="flex-1 flex flex-col h-screen">
+      <div className="flex-1 flex flex-col h-screen bg-background">
         <Toolbar url={url} onBack={handleBack} />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center max-w-sm">
-            <div className="w-10 h-10 rounded-lg bg-red-50 flex items-center justify-center mx-auto mb-3">
+            <div className="w-10 h-10 rounded-xl bg-danger/10 flex items-center justify-center mx-auto mb-3">
               <svg
                 width="20"
                 height="20"
@@ -149,7 +152,7 @@ function EditorContent() {
             <p className="text-xs text-muted mb-4">{error}</p>
             <button
               onClick={handleBack}
-              className="h-8 px-4 rounded-md bg-surface-alt text-sm text-foreground hover:bg-border transition-colors"
+              className="h-8 px-4 rounded-lg bg-surface-alt border border-border text-sm text-foreground hover:border-border-hover transition-all"
             >
               ← Try another URL
             </button>
@@ -173,7 +176,7 @@ function EditorContent() {
         </div>
 
         {/* Right: Sidebar (inspector + prompt) */}
-        <div className="w-72 border-l border-border bg-white flex flex-col shrink-0">
+        <div className="w-72 border-l border-border bg-surface flex flex-col shrink-0">
           {/* Sidebar header */}
           <div className="h-9 border-b border-border flex items-center px-3">
             <span className="text-[10px] font-medium text-muted uppercase tracking-wider">

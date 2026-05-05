@@ -27,22 +27,31 @@ export async function analyzeUrl(url) {
 
 /**
  * Modify an HTML element using the LLM.
+ * Calls the backend directly (not through Next.js proxy) to avoid proxy timeouts.
  * @param {{element_html: string, styles: object, instruction: string}} payload
  * @returns {Promise<{modified_html: string}>}
  */
 export async function modifyElement(payload) {
-  const response = await fetch(`${API_BASE}/modify`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 min timeout
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || `Failed to modify element (${response.status})`);
+  try {
+    const response = await fetch(`http://localhost:8000/modify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.detail || `Failed to modify element (${response.status})`);
+    }
+
+    return response.json();
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  return response.json();
 }
 
 /**

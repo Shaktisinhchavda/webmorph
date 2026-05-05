@@ -6,7 +6,6 @@ import { modifyElement } from "@/lib/api";
 
 /**
  * PromptEditor — Natural language input for modifying the selected element.
- * Sends the instruction to the LLM and patches the iframe on success.
  */
 export default function PromptEditor({ iframeRef }) {
   const [instruction, setInstruction] = useState("");
@@ -29,18 +28,19 @@ export default function PromptEditor({ iframeRef }) {
           element_html: selectedElement.html,
           styles: selectedElement.styles || {},
           instruction: instruction.trim(),
+          context: selectedElement.context || null,
+          accessibility: selectedElement.accessibility || null,
+          box_model: selectedElement.boxModel || null,
         });
 
-        if (result.modified_html) {
-          // Push to history before patching
+        if (result.patch) {
           pushHistory({
             elementId: selectedElement.id,
             previousHtml: selectedElement.html,
-            newHtml: result.modified_html,
+            patch: result.patch,
             instruction: instruction.trim(),
           });
 
-          // Patch the iframe
           const iframe = iframeRef.current;
           if (iframe?.contentWindow) {
             iframe.contentWindow.postMessage(
@@ -48,7 +48,7 @@ export default function PromptEditor({ iframeRef }) {
                 source: "annotator-parent",
                 type: "patch",
                 id: selectedElement.id,
-                newHtml: result.modified_html,
+                patch: result.patch,
               },
               "*"
             );
@@ -63,21 +63,13 @@ export default function PromptEditor({ iframeRef }) {
         setProcessing(false);
       }
     },
-    [
-      selectedElement,
-      instruction,
-      isProcessing,
-      setProcessing,
-      setLastInstruction,
-      pushHistory,
-      iframeRef,
-    ]
+    [selectedElement, instruction, isProcessing, setProcessing, setLastInstruction, pushHistory, iframeRef]
   );
 
   const isDisabled = !selectedElement || isProcessing;
 
   return (
-    <div className="border-t border-border p-3">
+    <div className="border-t border-border p-3 bg-surface">
       <label className="text-[10px] font-medium text-muted uppercase tracking-wider mb-1.5 block">
         Modify Element
       </label>
@@ -85,57 +77,36 @@ export default function PromptEditor({ iframeRef }) {
         <textarea
           value={instruction}
           onChange={(e) => setInstruction(e.target.value)}
-          placeholder={
-            selectedElement
-              ? 'e.g. "Make this button larger and blue"'
-              : "Select an element first..."
-          }
+          placeholder={selectedElement ? 'e.g. "Make this larger and green"' : "Select an element first…"}
           disabled={!selectedElement}
-          rows={3}
-          className="w-full text-sm rounded-md border border-border bg-surface px-3 py-2 resize-none
-                     placeholder:text-muted/50 focus:outline-none focus:border-accent focus:ring-1
-                     focus:ring-accent/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          rows={2}
+          className="w-full text-sm rounded-lg border border-border bg-background px-3 py-2 resize-none
+                     text-foreground placeholder:text-muted/40
+                     focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/10
+                     transition-all disabled:opacity-40 disabled:cursor-not-allowed"
           onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-              handleSubmit();
-            }
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSubmit();
           }}
         />
         <button
           type="submit"
           disabled={isDisabled || !instruction.trim()}
-          className="w-full h-8 rounded-md text-sm font-medium transition-all
-                     bg-accent text-white hover:bg-accent-hover
-                     disabled:opacity-40 disabled:cursor-not-allowed
-                     flex items-center justify-center gap-2"
+          className="w-full h-8 rounded-lg text-xs font-medium transition-all
+                     bg-accent text-white hover:bg-accent-hover active:scale-[0.99]
+                     disabled:opacity-30 disabled:cursor-not-allowed
+                     flex items-center justify-center gap-1.5"
         >
           {isProcessing ? (
             <>
-              <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Processing…
+              <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              Applying…
             </>
           ) : (
-            <>
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 5l0 14" />
-                <path d="M18 13l-6 6" />
-                <path d="M6 13l6 6" />
-              </svg>
-              Apply Change
-            </>
+            "Apply Change"
           )}
         </button>
         <p className="text-[10px] text-muted text-center">
-          {selectedElement ? "Ctrl+Enter to apply" : "Select an element to start"}
+          {selectedElement ? "⌘ Enter to apply" : "Click an element to begin"}
         </p>
       </form>
     </div>

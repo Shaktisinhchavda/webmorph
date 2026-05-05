@@ -5,9 +5,10 @@ import { create } from "zustand";
  *
  * Manages:
  * - Page loading state
- * - Element selection (hover + click)
+ * - Element selection (hover + click + multi-select)
  * - Modification history (undo/redo)
  * - LLM processing state
+ * - Export functionality
  */
 const useEditorStore = create((set, get) => ({
   // ── Page state ──────────────────────────────
@@ -25,11 +26,40 @@ const useEditorStore = create((set, get) => ({
 
   // ── Element selection ───────────────────────
   hoveredElement: null, // { id, rect }
-  selectedElement: null, // { id, rect, html, tagName, textContent, styles }
+  selectedElement: null, // { id, rect, html, tagName, textContent, styles, boxModel, accessibility, context, attributes }
+  multiSelectedElements: [], // Array of selected element metadata for batch operations
 
   setHoveredElement: (el) => set({ hoveredElement: el }),
-  setSelectedElement: (el) => set({ selectedElement: el }),
-  clearSelection: () => set({ hoveredElement: null, selectedElement: null }),
+  setSelectedElement: (el) => set({ selectedElement: el, multiSelectedElements: [] }),
+
+  addToMultiSelection: (el) => {
+    const { multiSelectedElements, selectedElement } = get();
+    // If this is the first shift-click and we have a primary selection, include it
+    const existing = multiSelectedElements.length > 0
+      ? multiSelectedElements
+      : selectedElement
+        ? [selectedElement]
+        : [];
+
+    // Don't add duplicates
+    if (existing.find((e) => e.id === el.id)) {
+      // Remove it (toggle behavior)
+      const filtered = existing.filter((e) => e.id !== el.id);
+      set({
+        multiSelectedElements: filtered,
+        selectedElement: filtered[filtered.length - 1] || null,
+      });
+    } else {
+      const updated = [...existing, el];
+      set({
+        multiSelectedElements: updated,
+        selectedElement: el, // Most recent becomes primary
+      });
+    }
+  },
+
+  clearSelection: () =>
+    set({ hoveredElement: null, selectedElement: null, multiSelectedElements: [] }),
 
   // ── History (linear undo/redo) ──────────────
   // Each entry: { elementId, previousHtml, newHtml, instruction }
@@ -74,6 +104,42 @@ const useEditorStore = create((set, get) => ({
   setProcessing: (isProcessing) => set({ isProcessing }),
   setLastInstruction: (instruction) => set({ lastInstruction: instruction }),
 
+  // ── Export ──────────────────────────────────
+  generateCSSDiff: () => {
+    const { history, historyIndex } = get();
+    const applied = history.slice(0, historyIndex + 1);
+    if (applied.length === 0) return "";
+
+    const lines = [
+      "/* WebMorph — Exported CSS Changes */",
+      `/* ${applied.length} modification(s) */`,
+      "",
+    ];
+
+    applied.forEach((entry, i) => {
+      lines.push(`/* Change ${i + 1}: ${entry.instruction} */`);
+      lines.push(`/* Element: ${entry.elementId} */`);
+      lines.push(`/* Before: ${entry.previousHtml.substring(0, 80)}... */`);
+      lines.push(`/* After:  ${entry.newHtml.substring(0, 80)}... */`);
+      lines.push("");
+    });
+
+    return lines.join("\n");
+  },
+
+  generateChangeLog: () => {
+    const { history, historyIndex } = get();
+    const applied = history.slice(0, historyIndex + 1);
+    if (applied.length === 0) return [];
+    return applied.map((entry, i) => ({
+      index: i + 1,
+      instruction: entry.instruction,
+      elementId: entry.elementId,
+      previousHtml: entry.previousHtml,
+      newHtml: entry.newHtml,
+    }));
+  },
+
   // ── Reset ───────────────────────────────────
   resetEditor: () =>
     set({
@@ -81,6 +147,7 @@ const useEditorStore = create((set, get) => ({
       pageTitle: null,
       hoveredElement: null,
       selectedElement: null,
+      multiSelectedElements: [],
       history: [],
       historyIndex: -1,
       isProcessing: false,

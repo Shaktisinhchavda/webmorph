@@ -1,11 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
 import useEditorStore from "@/store/useEditorStore";
 
 /**
- * OverlayLayer — Renders hover and selection highlight boxes
- * on top of the iframe, positioned based on element bounding rects.
+ * OverlayLayer — Renders hover, selection, and multi-selection
+ * highlight boxes on top of the iframe.
  *
  * The overlay itself has pointer-events: none so clicks pass through
  * to the iframe underneath.
@@ -13,29 +12,51 @@ import useEditorStore from "@/store/useEditorStore";
 export default function OverlayLayer({ iframeRef }) {
   const hoveredElement = useEditorStore((s) => s.hoveredElement);
   const selectedElement = useEditorStore((s) => s.selectedElement);
-
-  // Calculate the iframe's offset in the parent to correctly position overlays
-  const getIframeOffset = () => {
-    if (!iframeRef?.current) return { top: 0, left: 0 };
-    const rect = iframeRef.current.getBoundingClientRect();
-    return { top: rect.top, left: rect.left };
-  };
-
-  const iframeOffset = iframeRef?.current
-    ? (() => {
-        const r = iframeRef.current.getBoundingClientRect();
-        return { top: r.top, left: r.left };
-      })()
-    : { top: 0, left: 0 };
+  const multiSelectedElements = useEditorStore((s) => s.multiSelectedElements);
 
   return (
     <div
       className="absolute inset-0 z-10"
       style={{ pointerEvents: "none" }}
     >
+      {/* Multi-selection highlights */}
+      {multiSelectedElements
+        .filter((el) => el.id !== selectedElement?.id)
+        .map((el) => (
+          <div
+            key={el.id}
+            className="absolute transition-all duration-100"
+            style={{
+              border: "2px solid #8b5cf6",
+              backgroundColor: "rgba(139, 92, 246, 0.06)",
+              top: el.rect.top,
+              left: el.rect.left,
+              width: el.rect.width,
+              height: el.rect.height,
+              borderRadius: 2,
+            }}
+          >
+            {/* Tag label for multi-selected */}
+            <div
+              className="absolute flex items-center gap-1 px-1.5 py-0.5 rounded text-white"
+              style={{
+                backgroundColor: "#8b5cf6",
+                fontSize: 10,
+                fontWeight: 500,
+                top: -20,
+                left: 0,
+                lineHeight: "14px",
+              }}
+            >
+              {el.tagName}
+            </div>
+          </div>
+        ))}
+
       {/* Hover highlight */}
       {hoveredElement &&
-        hoveredElement.id !== selectedElement?.id && (
+        hoveredElement.id !== selectedElement?.id &&
+        !multiSelectedElements.find((el) => el.id === hoveredElement.id) && (
           <div
             className="absolute border border-dashed transition-all duration-75"
             style={{
@@ -50,7 +71,7 @@ export default function OverlayLayer({ iframeRef }) {
           />
         )}
 
-      {/* Selection highlight */}
+      {/* Primary selection highlight */}
       {selectedElement && (
         <>
           <div
@@ -78,6 +99,11 @@ export default function OverlayLayer({ iframeRef }) {
             }}
           >
             {selectedElement.tagName}
+            {multiSelectedElements.length > 1 && (
+              <span className="opacity-70">
+                +{multiSelectedElements.length - 1}
+              </span>
+            )}
           </div>
         </>
       )}

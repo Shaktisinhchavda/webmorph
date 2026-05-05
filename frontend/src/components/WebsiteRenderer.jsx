@@ -6,11 +6,27 @@ import useEditorStore from "@/store/useEditorStore";
 /**
  * WebsiteRenderer — Renders the fetched HTML inside an iframe.
  * The inject.js annotation script is pre-embedded in the HTML by the backend.
+ * Handles all postMessage events from inject.js including multi-select.
  */
 export default function WebsiteRenderer({ iframeRef }) {
   const pageHtml = useEditorStore((s) => s.pageHtml);
   const setHoveredElement = useEditorStore((s) => s.setHoveredElement);
   const setSelectedElement = useEditorStore((s) => s.setSelectedElement);
+  const addToMultiSelection = useEditorStore((s) => s.addToMultiSelection);
+
+  // Build a full element metadata object from postMessage data
+  const buildElementData = (data) => ({
+    id: data.id,
+    rect: data.rect,
+    html: data.html,
+    tagName: data.tagName,
+    textContent: data.textContent,
+    styles: data.styles,
+    boxModel: data.boxModel || null,
+    accessibility: data.accessibility || null,
+    context: data.context || null,
+    attributes: data.attributes || null,
+  });
 
   // Listen for postMessage events from the injected script
   const handleMessage = useCallback(
@@ -28,31 +44,21 @@ export default function WebsiteRenderer({ iframeRef }) {
           break;
 
         case "select":
-          setSelectedElement({
-            id: data.id,
-            rect: data.rect,
-            html: data.html,
-            tagName: data.tagName,
-            textContent: data.textContent,
-            styles: data.styles,
-          });
+          setSelectedElement(buildElementData(data));
+          break;
+
+        case "multi-select":
+          addToMultiSelection(buildElementData(data));
           break;
 
         case "patched":
           // Update the selected element with new metadata after a patch
-          setSelectedElement({
-            id: data.id,
-            rect: data.rect,
-            html: data.html,
-            tagName: data.tagName,
-            textContent: data.textContent,
-            styles: data.styles,
-          });
+          setSelectedElement(buildElementData(data));
           break;
 
         case "ready":
           console.log(
-            `[Annotator] Injection complete — ${data.elementCount} elements indexed`
+            `[WebMorph] Injection complete — ${data.elementCount} elements indexed`
           );
           break;
 
@@ -60,7 +66,7 @@ export default function WebsiteRenderer({ iframeRef }) {
           break;
       }
     },
-    [setHoveredElement, setSelectedElement]
+    [setHoveredElement, setSelectedElement, addToMultiSelection]
   );
 
   useEffect(() => {
@@ -86,4 +92,3 @@ export default function WebsiteRenderer({ iframeRef }) {
     />
   );
 }
-

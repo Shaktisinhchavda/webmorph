@@ -21,17 +21,12 @@ export default function HistoryControls({ iframeRef }) {
   const canUndo = historyIndex >= 0;
   const canRedo = historyIndex < history.length - 1;
 
-  const patchIframe = useCallback(
-    (elementId, html) => {
+  const sendToIframe = useCallback(
+    (elementId, payload) => {
       const iframe = iframeRef.current;
       if (iframe?.contentWindow) {
         iframe.contentWindow.postMessage(
-          {
-            source: "annotator-parent",
-            type: "patch",
-            id: elementId,
-            newHtml: html,
-          },
+          { source: "annotator-parent", type: "patch", id: elementId, ...payload },
           "*"
         );
       }
@@ -41,38 +36,37 @@ export default function HistoryControls({ iframeRef }) {
 
   const handleUndo = useCallback(() => {
     const entry = undo();
-    if (entry) {
-      patchIframe(entry.elementId, entry.previousHtml);
-    }
-  }, [undo, patchIframe]);
+    if (entry) sendToIframe(entry.elementId, { newHtml: entry.previousHtml });
+  }, [undo, sendToIframe]);
 
   const handleRedo = useCallback(() => {
     const entry = redo();
     if (entry) {
-      patchIframe(entry.elementId, entry.newHtml);
+      if (entry.patch) sendToIframe(entry.elementId, { patch: entry.patch });
+      else if (entry.newHtml) sendToIframe(entry.elementId, { newHtml: entry.newHtml });
     }
-  }, [redo, patchIframe]);
+  }, [redo, sendToIframe]);
 
   const handleRegenerate = useCallback(async () => {
     if (!selectedElement || !lastInstruction || isProcessing) return;
-
     setProcessing(true);
-
     try {
       const result = await modifyElement({
         element_html: selectedElement.html,
         styles: selectedElement.styles || {},
         instruction: lastInstruction,
+        context: selectedElement.context || null,
+        accessibility: selectedElement.accessibility || null,
+        box_model: selectedElement.boxModel || null,
       });
-
-      if (result.modified_html) {
+      if (result.patch) {
         pushHistory({
           elementId: selectedElement.id,
           previousHtml: selectedElement.html,
-          newHtml: result.modified_html,
+          patch: result.patch,
           instruction: lastInstruction,
         });
-        patchIframe(selectedElement.id, result.modified_html);
+        sendToIframe(selectedElement.id, { patch: result.patch });
       }
     } catch (err) {
       console.error("[History] Regenerate failed:", err);
@@ -80,106 +74,51 @@ export default function HistoryControls({ iframeRef }) {
     } finally {
       setProcessing(false);
     }
-  }, [
-    selectedElement,
-    lastInstruction,
-    isProcessing,
-    setProcessing,
-    pushHistory,
-    patchIframe,
-  ]);
+  }, [selectedElement, lastInstruction, isProcessing, setProcessing, pushHistory, sendToIframe]);
+
+  const ToolBtn = ({ onClick, disabled, title, children }) => (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className="h-7 px-2 rounded text-xs font-medium text-muted
+                 hover:bg-surface-alt hover:text-foreground
+                 disabled:opacity-25 disabled:cursor-not-allowed
+                 transition-colors flex items-center gap-1.5"
+    >
+      {children}
+    </button>
+  );
 
   return (
-    <div className="h-10 border-t border-border bg-white flex items-center px-4 gap-1 shrink-0">
-      {/* Undo */}
-      <button
-        onClick={handleUndo}
-        disabled={!canUndo || isProcessing}
-        className="h-7 px-2.5 rounded text-xs font-medium text-muted
-                   hover:bg-surface-alt hover:text-foreground
-                   disabled:opacity-30 disabled:cursor-not-allowed
-                   transition-colors flex items-center gap-1.5"
-        title="Undo (Ctrl+Z)"
-      >
-        <svg
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M3 7v6h6" />
-          <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
+    <div className="h-9 border-t border-border bg-surface flex items-center px-3 gap-0.5 shrink-0">
+      <ToolBtn onClick={handleUndo} disabled={!canUndo || isProcessing} title="Undo (Ctrl+Z)">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 7v6h6" /><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
         </svg>
         Undo
-      </button>
+      </ToolBtn>
 
-      {/* Redo */}
-      <button
-        onClick={handleRedo}
-        disabled={!canRedo || isProcessing}
-        className="h-7 px-2.5 rounded text-xs font-medium text-muted
-                   hover:bg-surface-alt hover:text-foreground
-                   disabled:opacity-30 disabled:cursor-not-allowed
-                   transition-colors flex items-center gap-1.5"
-        title="Redo (Ctrl+Y)"
-      >
-        <svg
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M21 7v6h-6" />
-          <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" />
+      <ToolBtn onClick={handleRedo} disabled={!canRedo || isProcessing} title="Redo (Ctrl+Y)">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 7v6h-6" /><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" />
         </svg>
         Redo
-      </button>
+      </ToolBtn>
 
-      {/* Divider */}
       <div className="w-px h-4 bg-border mx-1" />
 
-      {/* Regenerate */}
-      <button
-        onClick={handleRegenerate}
-        disabled={!selectedElement || !lastInstruction || isProcessing}
-        className="h-7 px-2.5 rounded text-xs font-medium text-muted
-                   hover:bg-surface-alt hover:text-foreground
-                   disabled:opacity-30 disabled:cursor-not-allowed
-                   transition-colors flex items-center gap-1.5"
-        title="Regenerate last modification"
-      >
-        <svg
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M21.5 2v6h-6" />
-          <path d="M2.5 22v-6h6" />
-          <path d="M2 11.5a10 10 0 0 1 18.8-4.3" />
-          <path d="M22 12.5a10 10 0 0 1-18.8 4.2" />
+      <ToolBtn onClick={handleRegenerate} disabled={!selectedElement || !lastInstruction || isProcessing} title="Regenerate">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21.5 2v6h-6" /><path d="M2.5 22v-6h6" />
+          <path d="M2 11.5a10 10 0 0 1 18.8-4.3" /><path d="M22 12.5a10 10 0 0 1-18.8 4.2" />
         </svg>
         Regenerate
-      </button>
+      </ToolBtn>
 
-      {/* History counter */}
-      <div className="ml-auto text-[10px] text-muted">
-        {history.length > 0
-          ? `${historyIndex + 1} / ${history.length} changes`
-          : "No changes yet"}
-      </div>
+      <span className="ml-auto text-[10px] text-muted font-mono">
+        {history.length > 0 ? `${historyIndex + 1}/${history.length}` : "—"}
+      </span>
     </div>
   );
 }
