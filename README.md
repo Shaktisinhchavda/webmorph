@@ -4,7 +4,7 @@
 
 WebMorph AI is a visual web editor that lets you modify any website's UI using natural language. Select elements by clicking, type instructions like *"make this button green and larger"*, and watch the AI patch your changes in real-time.
 
-🎥 **[Watch the Demo Video on Loom](https://www.loom.com/share/e25f1137bb4d4f11916a2b502eca9074)**
+🎥 **[Watch the Demo Video on Loom](https://www.loom.com/share/1d670064aac8491b9cfa64da4ff12e0c)**
 
 ![Next.js](https://img.shields.io/badge/Next.js_16-000?logo=next.js&logoColor=white) ![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white) ![Gemini](https://img.shields.io/badge/Gemini_AI-4285F4?logo=google&logoColor=white) ![Tailwind](https://img.shields.io/badge/Tailwind_CSS_4-06B6D4?logo=tailwindcss&logoColor=white)
 
